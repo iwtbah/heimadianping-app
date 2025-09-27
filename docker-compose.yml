@@ -1,0 +1,34 @@
+# heimadianping
+services:
+  redis:
+    image: redis:6.2.6
+    volumes:
+      - ./redis/redis-data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    # 如果你在 Apple Silicon/M1 且遇到兼容问题，可取消下一行注释强制架构
+    # platform: linux/amd64
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/html:/etc/nginx/html
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: hmdp 
+      MYSQL_USER: appuser        # 创建普通用户 appuser
+      MYSQL_PASSWORD: apppass    # 设置普通用户密码
+    volumes:
+      - ./mysql/mysql-data:/var/lib/mysql
+    restart: unless-stopped

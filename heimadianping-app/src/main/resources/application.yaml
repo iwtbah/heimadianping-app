@@ -1,0 +1,55 @@
+# 健康检查（/actuator/health）
+#   可以直接看到应用是否运行正常，数据库、Redis、消息队列等组件是否连通。
+# 应用信息（/actuator/info）
+#   可以展示自定义信息（比如项目版本、git 提交号等）。
+# 运行指标（/actuator/metrics）
+#   包括 JVM 内存、GC 次数、线程数、HTTP 请求统计、数据库连接池状态等。
+# 环境信息（/actuator/env）
+#展示应用当前生效的配置属性（调试配置问题特别有用）。
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus          # 开放所有端点（生产可只留需要的）
+  endpoint:
+    health:
+      show-details: always    # 便于调试查看详情
+
+server:
+  port: 8081
+spring:
+  application:
+    name: heimadianping-app
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/hmdp?useSSL=false&serverTimezone=UTC
+    username: root
+    password: 123456
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: 123456
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 10
+          min-idle: 1
+          time-between-eviction-runs: 10s
+  jackson:
+    default-property-inclusion: non_null # JSON处理时忽略非空字段spring:
+  # 热部署
+  devtools:
+    restart:
+      enabled: true               # 默认就是 true，可省略
+      additional-paths: src/main/java, src/main/resources
+      exclude: static/**,public/** # 这些改动通常只刷新页面，不必重启
+    livereload:
+      enabled: true               # 默认 true
+
+mybatis-plus:
+  type-aliases-package: com.zwz5.entity # 别名扫描包
+
+logging:
+  level:
+    com.zwz5: debug

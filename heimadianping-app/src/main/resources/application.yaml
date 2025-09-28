@@ -48,7 +48,7 @@ spring:
       enabled: true               # 默认 true
 
 mybatis-plus:
-  type-aliases-package: com.zwz5.entity # 别名扫描包
+  type-aliases-package: com.zwz5.pojo.entity # 别名扫描包
 
 logging:
   level:

@@ -7,7 +7,7 @@ import com.zwz5.pojo.entity.Blog;
 import com.zwz5.pojo.entity.User;
 import com.zwz5.service.IBlogService;
 import com.zwz5.service.IUserService;
-import com.zwz5.utils.SystemConstants;
+import com.zwz5.constants.SystemConstants;
 import com.zwz5.utils.UserHolder;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;

@@ -1,4 +1,4 @@
-package com.zwz5.utils;
+package com.zwz5.constants;
 
 public class RedisConstants {
     public static final String LOGIN_CODE_KEY = "login:code:";

@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zwz5.common.Result;
 import com.zwz5.pojo.entity.Shop;
 import com.zwz5.service.IShopService;
-import com.zwz5.utils.SystemConstants;
+import com.zwz5.constants.SystemConstants;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 

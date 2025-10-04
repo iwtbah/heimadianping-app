@@ -10,7 +10,7 @@ public class PasswordEncoder {
 
     public static String encode(String password) {
         // 生成盐
-        String salt = generateRandomString(20);
+        String salt = RandomUtils.generateRandomString(20);
         // 加密
         return encode(password,salt);
     }
@@ -30,16 +30,5 @@ public class PasswordEncoder {
         String salt = arr[0];
         // 比较
         return encodedPassword.equals(encode(rawPassword, salt));
-    }
-
-    private static String generateRandomString(int length) {
-        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        SecureRandom random = new SecureRandom();
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < length; i++) {
-            int index = random.nextInt(chars.length());
-            sb.append(chars.charAt(index));
-        }
-        return sb.toString();
     }
 }

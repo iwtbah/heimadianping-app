@@ -13,4 +13,5 @@ import com.zwz5.pojo.entity.User;
  */
 public interface IUserService extends IService<User> {
 
+    User createUserWithPhone(String phone);
 }

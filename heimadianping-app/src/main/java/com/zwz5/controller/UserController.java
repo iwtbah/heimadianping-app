@@ -101,6 +101,7 @@ public class UserController {
         String token = UUID.randomUUID().toString();
         UserDTO userDTO = new UserDTO();
         BeanUtils.copyProperties(user, userDTO);
+
         // 将User对象转化为HashMap
         Map<String, String> userMap = new HashMap<>();
         BeanMap.create(userDTO).forEach((k, v) -> userMap.put(k.toString(), v == null ? "" : v.toString()));

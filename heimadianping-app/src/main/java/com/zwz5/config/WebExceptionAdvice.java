@@ -1,6 +1,7 @@
 package com.zwz5.config;
 
 import com.zwz5.common.Result;
+import com.zwz5.exception.LockException;
 import com.zwz5.exception.NullException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -18,7 +19,13 @@ public class WebExceptionAdvice {
 
     @ExceptionHandler(NullException.class)
     public Result NullException(NullException e) {
-        log.error(e.getMessage(), e);
+        log.warn(e.getMessage(), e);
+        return Result.fail(e.getMessage());
+    }
+
+    @ExceptionHandler(LockException.class)
+    public Result LockException(LockException e) {
+        log.warn(e.getMessage(), e);
         return Result.fail(e.getMessage());
     }
 }

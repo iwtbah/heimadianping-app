@@ -39,6 +39,18 @@ public class JsonUtils {
         }
     }
 
+    /**
+     * 任意对象转目标类型（用于 Map/LinkedHashMap 到实体的转换）
+     */
+    public <T> T convertValue(Object source, Class<T> clazz) {
+        try {
+            return objectMapper.convertValue(source, clazz);
+        } catch (IllegalArgumentException e) {
+            log.error("类型转换失败: source={}, targetType={}", source, clazz, e);
+            throw new RuntimeException("类型转换失败", e);
+        }
+    }
+
     public <T> List<T> jsonToList(String json, Class<T> clazz) {
         try {
             return objectMapper.readValue(json,

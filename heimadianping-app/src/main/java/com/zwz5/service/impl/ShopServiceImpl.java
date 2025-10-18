@@ -7,6 +7,7 @@ import com.zwz5.mapper.ShopMapper;
 import com.zwz5.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zwz5.utils.JsonUtils;
+import com.zwz5.utils.RedisData;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -53,7 +55,10 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // return queryByPassThrough(id);
 
         // 缓存击穿 互斥锁方案
-        return queryWithMutex(id);
+        //return queryWithMutex(id);
+
+        // 缓存击穿 逻辑过期 + 异步缓存重建方案
+        return queryWithLogicalExpire(id);
 
     }
 
@@ -70,9 +75,13 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         String key = CACHE_SHOP_KEY + shop.getId();
         stringRedisTemplate.delete(key);
         // 延迟双删，避免并发环境旧值回填
-        // 异步线程池
+        // 在线程池中异步重建缓存
         CompletableFuture.runAsync(() -> {
-            try { Thread.sleep(300); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
             stringRedisTemplate.delete(key);
         }, cacheOpsExecutor);
     }
@@ -86,6 +95,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     public Shop queryByPassThrough(Long id) {
 
         // TODO Redisson 的 RBloomFilter 来实现布隆过滤器，后续补充
+
         // 查询缓存
         String key = CACHE_SHOP_KEY + id;
         String shopJson = stringRedisTemplate.opsForValue().get(key);
@@ -118,7 +128,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
      */
     public Shop queryWithMutex(Long id) {
 
-        // TODO 布隆过滤器
+        // TODO Redisson 的 RBloomFilter 来实现布隆过滤器，后续补充
 
         // 查询缓存
         final String key = CACHE_SHOP_KEY + id;
@@ -211,6 +221,92 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
     }
 
+    /**
+     * 缓存击穿处理：逻辑过期 + 异步重建
+     * 使用场景：热点店铺读多写少，允许短暂返回旧值。
+     * 1. 读取 Redis 逻辑过期结构，命中空串说明数据库无记录，直接抛出 NullException。
+     * 2. 命中后反序列化 RedisData，未过期直接返回 Shop。
+     * 3. 已过期则尝试获取 lock:shop:id 互斥锁并做二次校验；获取成功后异步查库写回新的逻辑过期数据。
+     * 4. 未获得锁的线程与加锁线程的同步返回值均为旧数据，以保证接口可用性。
+     */
+    public Shop queryWithLogicalExpire(Long id) {
+        final String key = CACHE_SHOP_KEY + id;
+        String cachedShopJson = stringRedisTemplate.opsForValue().get(key);
+        long jitterMinutes = ThreadLocalRandom.current().nextLong(1, 3);
+        // 命中空串表示数据库无记录
+        if (cachedShopJson != null && cachedShopJson.isEmpty()) {
+            throw new NullException("未查询到值");
+        }
+        // 缓存命中后解析逻辑过期结构
+        if (StringUtils.hasText(cachedShopJson)) {
+            RedisData redisData = jsonUtils.jsonToBean(cachedShopJson, RedisData.class);
+            Shop shop = jsonUtils.convertValue(redisData.getData(), Shop.class);
+            // 缓存仍有效直接返回
+            LocalDateTime expireTime = redisData.getExpireTime();
+            if (expireTime != null && expireTime.isAfter(LocalDateTime.now())) {
+                return shop;
+            }
+            // 缓存已过期则尝试获取互斥锁
+            final String lockKey = LOCK_SHOP_KEY + id;
+            String token = null;
+            // 拿到锁后在线程池中异步重建
+            if ((token = tryLock(lockKey, LOCK_SHOP_TTL)) != null) {
+                try {
+                    // double check 避免重复重建
+                    String cachedShopJson_dc = stringRedisTemplate.opsForValue().get(key);
+                    // 再次解析逻辑过期结构
+                    if (StringUtils.hasText(cachedShopJson_dc)) {
+                        redisData = jsonUtils.jsonToBean(cachedShopJson_dc, RedisData.class);
+                        shop = jsonUtils.convertValue(redisData.getData(), Shop.class);
+                        // 二次校验仍有效直接返回
+                        expireTime = redisData.getExpireTime();
+                        if (expireTime != null && expireTime.isAfter(LocalDateTime.now())) {
+                            return shop;
+                        }
+                    }
+                    // 在线程池中异步重建缓存
+                    CompletableFuture.runAsync(() -> {
+                        // 从数据库查询最新 Shop
+                        Shop latest = getById(id);
+                        if (latest == null) {
+                            stringRedisTemplate.opsForValue().set(key, "", CACHE_NULL_TTL + jitterMinutes, TimeUnit.MINUTES);
+                        } else {
+                            // 写入新的逻辑过期数据
+                            stringRedisTemplate.opsForValue().set(
+                                    key,
+                                    jsonUtils.beanToJson(RedisData.builder().data(latest).expireTime(LocalDateTime.now().plusMinutes(CACHE_SHOP_TTL + jitterMinutes)).build())
+                            );
+                        }
+                    }, cacheOpsExecutor);
+                } catch (Exception e) {
+                    // 记录日志，避免向外抛异常
+                    log.error("async rebuild cache failed, key={}", key);
+                } finally {
+                    // 释放锁
+                    // 仅在持有锁的情况下按 token 释放，避免误删他人锁
+                    if (token != null) {
+                        unlock(lockKey, token);
+                    }
+                }
+            }
+            return shop;
+        }
+
+        // 缓存未命中则回源数据库并写入逻辑过期结构
+        // 从数据库查询最新 Shop
+        Shop shop = getById(id);
+        if (shop == null) {
+            stringRedisTemplate.opsForValue().set(key, "", CACHE_NULL_TTL + jitterMinutes, TimeUnit.MINUTES);
+            throw new NullException("未查询到值");
+        }
+        // 写入新的逻辑过期数据
+        stringRedisTemplate.opsForValue().set(
+                key,
+                jsonUtils.beanToJson(RedisData.builder().data(shop).expireTime(LocalDateTime.now().plusMinutes(CACHE_SHOP_TTL + jitterMinutes)).build())
+        );
+        return shop;
+    }
+
 
     /**
      * 尝试获取分布式锁（原子设置过期），返回锁token；失败返回 null
@@ -233,7 +329,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     /**
      * 释放分布式锁（仅当 token 匹配时删除）
      *
-     * @param key 锁的键
+     * @param key   锁的键
      * @param token 锁token
      * @return 是否成功释放锁
      */

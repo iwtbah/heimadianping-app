@@ -1,7 +1,6 @@
-package com.zwz5.utils;
+package com.zwz5.common.utils;
 
 
-import java.security.SecureRandom;
 import org.springframework.util.DigestUtils;
 
 import java.nio.charset.StandardCharsets;

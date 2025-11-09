@@ -1,7 +1,7 @@
 package com.zwz5.controller;
 
 
-import com.zwz5.common.Result;
+import com.zwz5.common.result.Result;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

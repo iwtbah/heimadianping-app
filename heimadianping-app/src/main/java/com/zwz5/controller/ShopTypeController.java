@@ -1,6 +1,6 @@
 package com.zwz5.controller;
 
-import com.zwz5.common.Result;
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.entity.ShopType;
 import com.zwz5.service.IShopTypeService;
 import jakarta.annotation.Resource;

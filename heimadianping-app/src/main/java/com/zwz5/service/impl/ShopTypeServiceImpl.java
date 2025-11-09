@@ -4,7 +4,7 @@ import com.zwz5.pojo.entity.ShopType;
 import com.zwz5.mapper.ShopTypeMapper;
 import com.zwz5.service.IShopTypeService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zwz5.utils.JsonUtils;
+import com.zwz5.common.utils.JsonUtils;
 import jakarta.annotation.Resource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;

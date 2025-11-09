@@ -4,10 +4,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zwz5.pojo.entity.User;
 import com.zwz5.mapper.UserMapper;
 import com.zwz5.service.IUserService;
-import com.zwz5.utils.RandomUtils;
+import com.zwz5.common.utils.RandomUtils;
 import org.springframework.stereotype.Service;
-
-import java.time.LocalDateTime;
 
 /**
  * <p>

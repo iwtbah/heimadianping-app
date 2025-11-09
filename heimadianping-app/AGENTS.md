@@ -1,4 +1,5 @@
 # Repository Guidelines
+一切的回答使用中文简体
 
 ## 项目结构与模块组织
 核心业务位于 `heimadianping-app/src/main/java/com/zwz5`，按 `controller`、`service`、`mapper`、`pojo`、`config`、`utils` 分层；数据映射 XML 与配置放在 `src/main/resources/mapper` 与 `application.yaml`。Redis/MySQL/Nginx 的容器配置存放于仓库根目录下的 `docker-compose.yml`、`redis/`、`mysql/`、`nginx/`。实验性 Redis 示例位于 `demo/`，如需验证请避免污染正式模块。

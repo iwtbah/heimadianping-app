@@ -1,4 +1,4 @@
-package com.zwz5.common;
+package com.zwz5.common.result;
 
 import lombok.Data;
 

@@ -1,6 +1,4 @@
-package com.zwz5.utils;
-
-import java.util.Objects;
+package com.zwz5.common.utils;
 
 /**
  * @author 虎哥

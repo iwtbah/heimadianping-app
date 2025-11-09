@@ -2,7 +2,7 @@ package com.zwz5.controller;
 
 import org.springframework.util.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.zwz5.common.Result;
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.entity.Shop;
 import com.zwz5.service.IShopService;
 import com.zwz5.constants.SystemConstants;

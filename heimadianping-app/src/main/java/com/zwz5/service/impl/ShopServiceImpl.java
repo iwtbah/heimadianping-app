@@ -1,13 +1,15 @@
 package com.zwz5.service.impl;
 
+import com.zwz5.common.cache.CacheClient;
+import com.zwz5.common.cache.RedisCacheClient;
 import com.zwz5.exception.LockException;
 import com.zwz5.exception.NullException;
 import com.zwz5.pojo.entity.Shop;
 import com.zwz5.mapper.ShopMapper;
 import com.zwz5.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zwz5.utils.JsonUtils;
-import com.zwz5.utils.RedisData;
+import com.zwz5.common.utils.JsonUtils;
+import com.zwz5.common.redis.RedisData;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -43,6 +45,9 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     private StringRedisTemplate stringRedisTemplate;
     @Resource
     private JsonUtils jsonUtils;
+    @Resource
+    private RedisCacheClient redisCacheClient;
+
 
     // 避免使用公共 ForkJoinPool，异步任务有自己可观测、可限流的线程池
     @Resource
@@ -52,13 +57,13 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Override
     public Shop queryById(Long id) {
         // 缓存穿透解决方案
-        // return queryByPassThrough(id);
+        return queryByPassThrough(id);
 
         // 缓存击穿 互斥锁方案
         //return queryWithMutex(id);
 
         // 缓存击穿 逻辑过期 + 异步缓存重建方案
-        return queryWithLogicalExpire(id);
+        //return queryWithLogicalExpire(id);
 
     }
 
@@ -87,7 +92,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     }
 
     /**
-     * 缓存穿透方法
+     * 缓存穿透解决方法
      *
      * @param id
      * @return
@@ -95,29 +100,15 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     public Shop queryByPassThrough(Long id) {
 
         // TODO Redisson 的 RBloomFilter 来实现布隆过滤器，后续补充
-
-        // 查询缓存
-        String key = CACHE_SHOP_KEY + id;
-        String shopJson = stringRedisTemplate.opsForValue().get(key);
-        // 命中有效缓存，反序列化为对象返回
-        if (StringUtils.hasText(shopJson)) {
-            return jsonUtils.jsonToBean(shopJson, Shop.class);
-        }
-        // 命中空值缓存，则Result.fail
-        if (shopJson != null && shopJson.isEmpty()) {
-            throw new NullException("未查询到值");
-        }
-        // 未命中则查询数据库
-        Shop shop = getById(id);
-        if (shop == null) {
-            // throw new NullException("未查询到店铺");
-            // 解决缓存穿透：将空值写入redis
-            stringRedisTemplate.opsForValue().set(key, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
-            throw new NullException("未查询到值");
-        }
-        // 写入缓存
-        stringRedisTemplate.opsForValue().set(key, jsonUtils.beanToJson(shop), CACHE_SHOP_TTL, TimeUnit.MINUTES);
-        return shop;
+        // TTL抖动
+        long jitterMinutes = ThreadLocalRandom.current().nextLong(1, 3);
+        return redisCacheClient.queryByPassThrough(
+                CACHE_SHOP_KEY,
+                id,
+                Shop.class,
+                this::getById,
+                CACHE_SHOP_TTL + jitterMinutes,
+                TimeUnit.MINUTES);
     }
 
     /**

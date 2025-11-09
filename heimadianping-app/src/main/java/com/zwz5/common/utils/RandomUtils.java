@@ -1,4 +1,4 @@
-package com.zwz5.utils;
+package com.zwz5.common.utils;
 
 import java.security.SecureRandom;
 

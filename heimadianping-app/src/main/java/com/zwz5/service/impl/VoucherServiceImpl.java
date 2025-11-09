@@ -1,7 +1,7 @@
 package com.zwz5.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zwz5.common.Result;
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.entity.Voucher;
 import com.zwz5.mapper.VoucherMapper;
 import com.zwz5.pojo.entity.SeckillVoucher;

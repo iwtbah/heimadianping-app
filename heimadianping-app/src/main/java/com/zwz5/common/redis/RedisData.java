@@ -1,4 +1,4 @@
-package com.zwz5.utils;
+package com.zwz5.common.redis;
 
 import lombok.Builder;
 import lombok.Data;

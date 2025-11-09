@@ -1,6 +1,6 @@
 package com.zwz5.config;
 
-import com.zwz5.common.Result;
+import com.zwz5.common.result.Result;
 import com.zwz5.exception.LockException;
 import com.zwz5.exception.NullException;
 import lombok.extern.slf4j.Slf4j;

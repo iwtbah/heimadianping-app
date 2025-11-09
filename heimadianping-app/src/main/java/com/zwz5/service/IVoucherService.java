@@ -1,6 +1,6 @@
 package com.zwz5.service;
 
-import com.zwz5.common.Result;
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.entity.Voucher;
 import com.baomidou.mybatisplus.extension.service.IService;
 

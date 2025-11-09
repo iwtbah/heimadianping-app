@@ -1,6 +1,6 @@
 package com.zwz5.controller;
 
-import com.zwz5.common.Result;
+import com.zwz5.common.result.Result;
 import com.zwz5.constants.SystemConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;

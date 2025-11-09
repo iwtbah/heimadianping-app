@@ -1,15 +1,15 @@
 package com.zwz5.controller;
 
 import com.zwz5.pojo.dto.LoginFormDTO;
-import com.zwz5.common.Result;
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.dto.UserDTO;
 import com.zwz5.pojo.entity.User;
 import com.zwz5.pojo.entity.UserInfo;
 import com.zwz5.service.IUserInfoService;
 import com.zwz5.service.IUserService;
-import com.zwz5.utils.RandomUtils;
+import com.zwz5.common.utils.RandomUtils;
 import com.zwz5.constants.RedisConstants;
-import com.zwz5.utils.RegexUtils;
+import com.zwz5.common.utils.RegexUtils;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;

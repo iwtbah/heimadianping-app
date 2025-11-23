@@ -48,7 +48,6 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Resource
     private RedisCacheClient redisCacheClient;
 
-
     // 避免使用公共 ForkJoinPool，异步任务有自己可观测、可限流的线程池
     @Resource
     @Qualifier("cacheOpsExecutor")
@@ -57,13 +56,13 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Override
     public Shop queryById(Long id) {
         // 缓存穿透解决方案
-        return queryByPassThrough(id);
+        //return queryByPassThrough(id);
 
         // 缓存击穿 互斥锁方案
         //return queryWithMutex(id);
 
         // 缓存击穿 逻辑过期 + 异步缓存重建方案
-        //return queryWithLogicalExpire(id);
+        return queryWithLogicalExpire(id);
 
     }
 
@@ -93,31 +92,52 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     /**
      * 缓存穿透解决方法
-     *
-     * @param id
-     * @return
      */
     public Shop queryByPassThrough(Long id) {
 
         // TODO Redisson 的 RBloomFilter 来实现布隆过滤器，后续补充
-        // TTL抖动
-        long jitterMinutes = ThreadLocalRandom.current().nextLong(1, 3);
         return redisCacheClient.queryByPassThrough(
                 CACHE_SHOP_KEY,
                 id,
                 Shop.class,
                 this::getById,
-                CACHE_SHOP_TTL + jitterMinutes,
-                TimeUnit.MINUTES);
+                CACHE_SHOP_TTL,
+                TimeUnit.MINUTES
+        );
     }
 
     /**
      * 缓存击穿 互斥锁方案
-     *
-     * @param id
-     * @return
      */
     public Shop queryWithMutex(Long id) {
+        return redisCacheClient.queryWithMutex(
+                CACHE_SHOP_KEY,
+                id,
+                Shop.class,
+                this::getById,
+                CACHE_SHOP_TTL,
+                TimeUnit.MINUTES
+        );
+    }
+
+    /**
+     * 缓存击穿 逻辑过期 + 异步重建 方案
+     */
+    public Shop queryWithLogicalExpire(Long id) {
+        return redisCacheClient.queryWithLogicalExpire(
+                CACHE_SHOP_KEY,
+                id,
+                Shop.class,
+                this::getById,
+                CACHE_SHOP_TTL,
+                TimeUnit.MINUTES
+        );
+    }
+
+    /**
+     * 缓存击穿 互斥锁方案
+     */
+    /*public Shop queryWithMutex(Long id) {
 
         // TODO Redisson 的 RBloomFilter 来实现布隆过滤器，后续补充
 
@@ -210,17 +230,17 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
                 log.debug("shopId={} 释放锁结果={}\n", id, unlocked);
             }
         }
-    }
+    }*/
 
-    /**
-     * 缓存击穿处理：逻辑过期 + 异步重建
+     /**
+     * 缓存击穿 逻辑过期 + 异步重建 方案
      * 使用场景：热点店铺读多写少，允许短暂返回旧值。
      * 1. 读取 Redis 逻辑过期结构，命中空串说明数据库无记录，直接抛出 NullException。
      * 2. 命中后反序列化 RedisData，未过期直接返回 Shop。
      * 3. 已过期则尝试获取 lock:shop:id 互斥锁并做二次校验；获取成功后异步查库写回新的逻辑过期数据。
      * 4. 未获得锁的线程与加锁线程的同步返回值均为旧数据，以保证接口可用性。
      */
-    public Shop queryWithLogicalExpire(Long id) {
+    /*public Shop queryWithLogicalExpire(Long id) {
         final String key = CACHE_SHOP_KEY + id;
         String cachedShopJson = stringRedisTemplate.opsForValue().get(key);
         long jitterMinutes = ThreadLocalRandom.current().nextLong(1, 3);
@@ -296,40 +316,5 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
                 jsonUtils.beanToJson(RedisData.builder().data(shop).expireTime(LocalDateTime.now().plusMinutes(CACHE_SHOP_TTL + jitterMinutes)).build())
         );
         return shop;
-    }
-
-
-    /**
-     * 尝试获取分布式锁（原子设置过期），返回锁token；失败返回 null
-     *
-     * @param key           锁的键
-     * @param expireSeconds 过期时间（秒）
-     * @return 是否成功获取锁
-     */
-    public String tryLock(String key, long expireSeconds) {
-        String token = UUID.randomUUID().toString();
-        Boolean ok = stringRedisTemplate.opsForValue().setIfAbsent(key, token, expireSeconds, TimeUnit.SECONDS);
-        return (ok != null && ok) ? token : null;
-    }
-
-    private static final String UNLOCK_LUA =
-            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
-                    "  return redis.call('del', KEYS[1]) " +
-                    "else return 0 end";
-
-    /**
-     * 释放分布式锁（仅当 token 匹配时删除）
-     *
-     * @param key   锁的键
-     * @param token 锁token
-     * @return 是否成功释放锁
-     */
-    public boolean unlock(String key, String token) {
-        Long res = stringRedisTemplate.execute(
-                new DefaultRedisScript<>(UNLOCK_LUA, Long.class),
-                Collections.singletonList(key),
-                token
-        );
-        return res != null && res > 0;
-    }
+    }*/
 }

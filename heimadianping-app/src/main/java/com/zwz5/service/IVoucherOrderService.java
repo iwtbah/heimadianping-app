@@ -1,5 +1,6 @@
 package com.zwz5.service;
 
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.entity.VoucherOrder;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -13,4 +14,5 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface IVoucherOrderService extends IService<VoucherOrder> {
 
+    Result seckillVoucher(Long voucherId);
 }

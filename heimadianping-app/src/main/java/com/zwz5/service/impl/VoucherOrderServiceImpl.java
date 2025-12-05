@@ -10,6 +10,8 @@ import com.zwz5.service.ISeckillVoucherService;
 import com.zwz5.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
+import lombok.Synchronized;
+import org.springframework.aop.framework.AopContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,9 +40,17 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
      * @return
      */
     @Override
-    @Transactional
     public Result seckillVoucher(Long voucherId) {
+        Long userId = UserHolder.getUser().getId();
+        synchronized (userId.toString().intern()) {
+            // 使用代理对象，避免事务失效
+            IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
+            return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
+        }
+    }
 
+    @Transactional
+    public Result createVoucherOrder(Long userId, Long voucherId) {
         // 1.判断优惠卷是否存在
         SeckillVoucher voucher = seckillVoucherService.getById(voucherId);
         if (voucher == null) {
@@ -57,7 +67,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         if (voucher.getStock() < 1) {
             return Result.fail("库存不足！");
         }
-        // 4.扣减库存
+        // 4.判断用户是否购买
+        Long count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
+        if (count > 0) {
+            return Result.fail("用户已经购买！");
+        }
+        // 5.扣减库存
         boolean success = seckillVoucherService.update()
                 .setSql("stock = stock - 1")
                 .eq("voucher_id", voucherId)
@@ -67,11 +82,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         if (!success) {
             return Result.fail("库存不足！");
         }
-        // 5.增加订单
+        // 6.增加订单
         VoucherOrder voucherOrder = new VoucherOrder();
         voucherOrder.setId(redisIdWorker.nextId("order"));
         voucherOrder.setVoucherId(voucherId);
-        Long userId = UserHolder.getUser().getId();
         voucherOrder.setUserId(userId);
         voucherOrder.setCreateTime(LocalDateTime.now());
         voucherOrder.setUpdateTime(LocalDateTime.now());

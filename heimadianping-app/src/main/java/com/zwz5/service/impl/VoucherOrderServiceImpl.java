@@ -66,7 +66,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
 
         Ilock ilock  = new SimpleRedisLock(stringRedisTemplate,"order:" + userId);
-        boolean success = ilock.tryLock(60);
+        boolean success = ilock.tryLock(10);
         if (!success) {
             return Result.fail("不允许重复下单！");
         }
@@ -79,14 +79,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         } finally {
             ilock.unlock();
         }
-
-        /*
+/*
         synchronized (userId.toString().intern()) {
             // 使用代理对象，避免事务失效
             IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
             return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
-        }
-        */
+        }*/
     }
 
     @Transactional
@@ -105,11 +103,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 .update();
         if (!success) {
             return Result.fail("库存不足！");
-        }
-        try {
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
         }
         // 6.增加订单
         VoucherOrder voucherOrder = new VoucherOrder();

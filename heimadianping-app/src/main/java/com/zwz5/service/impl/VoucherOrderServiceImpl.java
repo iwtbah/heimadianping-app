@@ -1,5 +1,7 @@
 package com.zwz5.service.impl;
 
+import com.zwz5.common.lock.Ilock;
+import com.zwz5.common.lock.SimpleRedisLock;
 import com.zwz5.common.redis.RedisIdWorker;
 import com.zwz5.common.result.Result;
 import com.zwz5.common.utils.UserHolder;
@@ -12,6 +14,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.Synchronized;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +36,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private ISeckillVoucherService seckillVoucherService;
     @Resource
     private RedisIdWorker redisIdWorker;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 秒杀优惠卷抢购实现
@@ -42,15 +48,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Override
     public Result seckillVoucher(Long voucherId) {
         Long userId = UserHolder.getUser().getId();
-        synchronized (userId.toString().intern()) {
-            // 使用代理对象，避免事务失效
-            IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
-            return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
-        }
-    }
-
-    @Transactional
-    public Result createVoucherOrder(Long userId, Long voucherId) {
         // 1.判断优惠卷是否存在
         SeckillVoucher voucher = seckillVoucherService.getById(voucherId);
         if (voucher == null) {
@@ -67,6 +64,33 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         if (voucher.getStock() < 1) {
             return Result.fail("库存不足！");
         }
+
+        Ilock ilock  = new SimpleRedisLock(stringRedisTemplate,"order:" + userId);
+        boolean success = ilock.tryLock(60);
+        if (!success) {
+            return Result.fail("不允许重复下单！");
+        }
+        try {
+            // 拿到锁后，通过代理对象完成订单检测，库存扣减，下单
+            IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
+            return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
+        } catch (IllegalStateException e) {
+            throw new RuntimeException(e);
+        } finally {
+            ilock.unlock();
+        }
+
+        /*
+        synchronized (userId.toString().intern()) {
+            // 使用代理对象，避免事务失效
+            IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
+            return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
+        }
+        */
+    }
+
+    @Transactional
+    public Result createVoucherOrder(Long userId, Long voucherId) {
         // 4.判断用户是否购买
         Long count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
         if (count > 0) {
@@ -81,6 +105,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 .update();
         if (!success) {
             return Result.fail("库存不足！");
+        }
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
         // 6.增加订单
         VoucherOrder voucherOrder = new VoucherOrder();

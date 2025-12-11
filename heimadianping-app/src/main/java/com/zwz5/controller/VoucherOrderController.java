@@ -32,4 +32,9 @@ public class VoucherOrderController {
         return voucherOrderServiceNxLua.seckillVoucher(voucherId);
     }
 
+    @PostMapping("seckillRedisson/{id}")
+    public Result seckillVoucherRedisson(@PathVariable("id") Long voucherId) {
+        return voucherOrderServiceRedisson.seckillVoucher(voucherId);
+    }
+
 }

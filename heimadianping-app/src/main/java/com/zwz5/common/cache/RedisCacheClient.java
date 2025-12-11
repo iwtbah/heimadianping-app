@@ -105,6 +105,7 @@ public class RedisCacheClient implements CacheClient {
         return jsonUtils.jsonToBean(value, type);
     }
 
+
     /**
      * 缓存穿透方法
      *
@@ -232,6 +233,8 @@ public class RedisCacheClient implements CacheClient {
             }
         }
     }
+
+
 
     /**
      * 缓存击穿处理：逻辑过期 + 异步重建

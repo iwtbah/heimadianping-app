@@ -35,8 +35,6 @@ public class VoucherOrderServiceRedissonImpl extends ServiceImpl<VoucherOrderMap
     @Resource
     private RedisIdWorker redisIdWorker;
     @Resource
-    private StringRedisTemplate stringRedisTemplate;
-    @Resource
     private RedissonClient redissonClient;
 
     /**
@@ -68,24 +66,18 @@ public class VoucherOrderServiceRedissonImpl extends ServiceImpl<VoucherOrderMap
         RLock lock = redissonClient.getLock(RedisConstants.LOCK_ORDER_KEY + userId);
         try {
             // arg1:锁等待重试实际 arg2:锁自动释放时间，watchdog自动续期
-            boolean success = lock.tryLock(RedisConstants.LOCK_ORDER_AQS, RedisConstants.LOCK_ORDER_TTL, TimeUnit.SECONDS);
+            boolean success = lock.tryLock();
             if (!success) {
                 return Result.fail("不允许重复下单！");
             }
             // 拿到锁后，通过代理对象完成订单检测，库存扣减，下单
             IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
             return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
             lock.unlock();
         }
-/*
-        synchronized (userId.toString().intern()) {
-            // 使用代理对象，避免事务失效
-            IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
-            return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
-        }*/
     }
 
     @Transactional

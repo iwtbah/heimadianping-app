@@ -4,6 +4,7 @@ package com.zwz5.controller;
 import com.zwz5.common.result.Result;
 import com.zwz5.service.IVoucherOrderService;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -19,11 +20,16 @@ import org.springframework.web.bind.annotation.*;
 public class VoucherOrderController {
 
     @Resource
-    private IVoucherOrderService voucherOrderService;
+    @Qualifier("voucherOrderServiceRedisson")
+    private IVoucherOrderService voucherOrderServiceRedisson;
+
+    @Resource
+    @Qualifier("voucherOrderServiceSetNxLua")
+    private IVoucherOrderService voucherOrderServiceNxLua;
 
     @PostMapping("seckill/{id}")
     public Result seckillVoucher(@PathVariable("id") Long voucherId) {
-        return voucherOrderService.seckillVoucher(voucherId);
+        return voucherOrderServiceNxLua.seckillVoucher(voucherId);
     }
 
 }

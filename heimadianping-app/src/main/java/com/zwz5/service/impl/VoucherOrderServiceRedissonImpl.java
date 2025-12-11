@@ -1,36 +1,34 @@
 package com.zwz5.service.impl;
 
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zwz5.common.lock.Ilock;
 import com.zwz5.common.lock.SimpleRedisLock;
 import com.zwz5.common.redis.RedisIdWorker;
 import com.zwz5.common.result.Result;
 import com.zwz5.common.utils.UserHolder;
+import com.zwz5.constants.RedisConstants;
+import com.zwz5.mapper.VoucherOrderMapper;
 import com.zwz5.pojo.entity.SeckillVoucher;
 import com.zwz5.pojo.entity.VoucherOrder;
-import com.zwz5.mapper.VoucherOrderMapper;
 import com.zwz5.service.ISeckillVoucherService;
 import com.zwz5.service.IVoucherOrderService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
-import lombok.Synchronized;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
 
 /**
- * <p>
- * 服务实现类
- * </p>
- *
- * @author 虎哥
- * @since 2021-12-22
+ * 优惠卷秒杀 方案二
+ * 基于Redisson实现的分布式锁
  */
-@Service
-public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
+@Service("voucherOrderServiceRedisson")
+public class VoucherOrderServiceRedissonImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
 
     @Resource
     private ISeckillVoucherService seckillVoucherService;
@@ -38,6 +36,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private RedisIdWorker redisIdWorker;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private RedissonClient redissonClient;
 
     /**
      * 秒杀优惠卷抢购实现
@@ -64,20 +64,21 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         if (voucher.getStock() < 1) {
             return Result.fail("库存不足！");
         }
-
-        Ilock ilock  = new SimpleRedisLock(stringRedisTemplate,"order:" + userId);
-        boolean success = ilock.tryLock(10);
-        if (!success) {
-            return Result.fail("不允许重复下单！");
-        }
+        // 使用Redisson方案
+        RLock lock = redissonClient.getLock(RedisConstants.LOCK_ORDER_KEY + userId);
         try {
+            // arg1:锁等待重试实际 arg2:锁自动释放时间，watchdog自动续期
+            boolean success = lock.tryLock(RedisConstants.LOCK_ORDER_AQS, RedisConstants.LOCK_ORDER_TTL, TimeUnit.SECONDS);
+            if (!success) {
+                return Result.fail("不允许重复下单！");
+            }
             // 拿到锁后，通过代理对象完成订单检测，库存扣减，下单
             IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
             return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
-        } catch (IllegalStateException e) {
+        } catch (InterruptedException e) {
             throw new RuntimeException(e);
         } finally {
-            ilock.unlock();
+            lock.unlock();
         }
 /*
         synchronized (userId.toString().intern()) {
@@ -109,8 +110,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         voucherOrder.setId(redisIdWorker.nextId("order"));
         voucherOrder.setVoucherId(voucherId);
         voucherOrder.setUserId(userId);
-        voucherOrder.setCreateTime(LocalDateTime.now());
-        voucherOrder.setUpdateTime(LocalDateTime.now());
         save(voucherOrder);
         return Result.ok(voucherOrder.getId());
     }

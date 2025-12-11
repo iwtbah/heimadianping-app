@@ -108,7 +108,7 @@ public class UserController {
         String redisToken = RedisConstants.LOGIN_USER_KEY + token;
         // 存入Redis，并设置过期时间
         stringRedisTemplate.opsForHash().putAll(redisToken, userMap);
-        stringRedisTemplate.expire(redisToken,RedisConstants.LOGIN_USER_TTL, TimeUnit.SECONDS);
+        stringRedisTemplate.expire(redisToken,RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
 
         return Result.ok(token);
     }

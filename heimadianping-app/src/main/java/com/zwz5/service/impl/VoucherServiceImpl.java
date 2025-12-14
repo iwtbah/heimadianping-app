@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -53,7 +54,24 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
                 RedisConstants.CACHE_SHOP_VOUCHER_TTL,
                 TimeUnit.MINUTES
         );
-        // 将数组结果转换为 List 返回，空值时返回空列表避免空指针
+        // 从Redis中获取实时库存，封装到缓存中
+        if (vouchers != null && vouchers.length > 0) {
+            for (Voucher voucher : vouchers) {
+                // 只处理秒杀券
+                if (voucher.getType() != null && voucher.getType() == 1) {
+                    String stockKey = RedisConstants.SECKILL_STOCK_KEY + voucher.getId();
+                    String stockStr = stringRedisTemplate.opsForValue().get(stockKey);
+
+                    if (stockStr != null) {
+                        try {
+                            voucher.setStock(Integer.valueOf(stockStr));
+                        } catch (NumberFormatException e) {
+                            // Redis 中库存异常，兜底使用 DB 库存 或旧数据
+                        }
+                    }
+                }
+            }
+        }
         return Result.ok(vouchers == null ? List.of() : Arrays.asList(vouchers));
     }
 
@@ -79,9 +97,19 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         seckillVoucher.setBeginTime(voucher.getBeginTime());
         seckillVoucher.setEndTime(voucher.getEndTime());
         seckillVoucherService.save(seckillVoucher);
-        // 保存优惠卷到Redis中
-        String key = RedisConstants.SECKILL_STOCK_KEY + seckillVoucher.getVoucherId();
-        stringRedisTemplate.opsForValue().set(key, seckillVoucher.getStock().toString());
+        // 保存库存信息到Redis中
+        String stockKey = RedisConstants.SECKILL_STOCK_KEY + seckillVoucher.getVoucherId();
+        stringRedisTemplate.opsForValue().set(stockKey, seckillVoucher.getStock().toString());
+        // 保存优惠卷活动时间
+        String infoKey = RedisConstants.SECKILL_INFO_KEY + seckillVoucher.getVoucherId();
+        long beginMillis = voucher.getBeginTime().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long endMillis = voucher.getEndTime().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        stringRedisTemplate.opsForHash().put(infoKey, "beginTime", String.valueOf(beginMillis));
+        stringRedisTemplate.opsForHash().put(infoKey, "endTime", String.valueOf(endMillis));
+
+        // 删除对应店铺的优惠卷缓存
+        Long shopId = voucher.getShopId();
+        stringRedisTemplate.delete(RedisConstants.CACHE_SHOP_VOUCHER_KEY + ":" + shopId);
 
         // 为库存 key 设置过期时间：在秒杀结束时间后自动过期
         LocalDateTime now = LocalDateTime.now();
@@ -89,11 +117,13 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
 
         if (endTime.isAfter(now)) {
             long ttlSeconds = java.time.Duration.between(now, endTime).getSeconds();
-            // Redis 里设置过期时间
-            stringRedisTemplate.expire(key, ttlSeconds, java.util.concurrent.TimeUnit.SECONDS);
+            // Redis 里设置过期时间（库存 & 活动信息）
+            stringRedisTemplate.expire(stockKey, ttlSeconds, java.util.concurrent.TimeUnit.SECONDS);
+            stringRedisTemplate.expire(infoKey, ttlSeconds, java.util.concurrent.TimeUnit.SECONDS);
         } else {
             // 理论上不会走到这里：如果 endTime 已经过期，可以选择直接删除 key
-            stringRedisTemplate.delete(key);
+            stringRedisTemplate.delete(stockKey);
+            stringRedisTemplate.delete(infoKey);
         }
     }
 }

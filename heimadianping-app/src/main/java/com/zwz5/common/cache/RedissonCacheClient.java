@@ -8,6 +8,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -107,12 +108,6 @@ public class RedissonCacheClient implements CacheClient {
      * 4) TTL 加入抖动，空值与正常值统一 timeUnit，降低同刻失效与穿透风险。
      */
     public <T, R> R queryWithLogicalExpire(String prefix, T id, Class<R> type, Function<T, R> dbFallback, Long expire, TimeUnit timeUnit) {
-        Objects.requireNonNull(id, "key must not be null");
-        Objects.requireNonNull(expire, "expire must not be null");
-        Objects.requireNonNull(timeUnit, "timeUnit must not be null");
-        Objects.requireNonNull(dbFallback, "dbFallback must not be null");
-        Objects.requireNonNull(type, "type must not be null");
-
         String key = prefix + id;
         // 抖动保持与入参 timeUnit 一致，避免混用秒/分
         long jitter = ThreadLocalRandom.current().nextLong(1, 3);

@@ -70,7 +70,7 @@ public class VoucherOrderServiceSetNxLuaImpl extends ServiceImpl<VoucherOrderMap
         try {
             // 拿到锁后，通过代理对象完成订单检测，库存扣减，下单
             IVoucherOrderService voucherOrderServiceProxy = (IVoucherOrderService) AopContext.currentProxy();
-            return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId);
+            return voucherOrderServiceProxy.createVoucherOrder(userId, voucherId, redisIdWorker.nextId("order"));
         } catch (IllegalStateException e) {
             throw new RuntimeException(e);
         } finally {
@@ -85,7 +85,7 @@ public class VoucherOrderServiceSetNxLuaImpl extends ServiceImpl<VoucherOrderMap
     }
 
     @Transactional
-    public Result createVoucherOrder(Long userId, Long voucherId) {
+    public Result createVoucherOrder(Long userId, Long voucherId, Long orderId) {
         // 4.判断用户是否购买
         Long count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
         if (count > 0) {
@@ -103,7 +103,7 @@ public class VoucherOrderServiceSetNxLuaImpl extends ServiceImpl<VoucherOrderMap
         }
         // 6.增加订单
         VoucherOrder voucherOrder = new VoucherOrder();
-        voucherOrder.setId(redisIdWorker.nextId("order"));
+        voucherOrder.setId(orderId);
         voucherOrder.setVoucherId(voucherId);
         voucherOrder.setUserId(userId);
         save(voucherOrder);

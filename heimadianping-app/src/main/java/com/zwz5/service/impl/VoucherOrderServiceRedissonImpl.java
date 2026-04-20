@@ -131,6 +131,7 @@ public class VoucherOrderServiceRedissonImpl extends ServiceImpl<VoucherOrderMap
         return switch (result.intValue()) {
             case SeckillResultCodeConstants.NOT_STARTED -> Result.fail("抢购还未开始！");
             case SeckillResultCodeConstants.ENDED -> Result.fail("抢购已经结束！");
+            case SeckillResultCodeConstants.INFO_MISSING -> Result.fail("秒杀活动信息不存在或已过期！");
             case SeckillResultCodeConstants.NO_STOCK -> Result.fail("库存不足");
             case SeckillResultCodeConstants.DUPLICATE -> Result.fail("不能重复下单");
             default -> {

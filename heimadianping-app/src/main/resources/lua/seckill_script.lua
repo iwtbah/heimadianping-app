@@ -21,7 +21,7 @@ local beginTime = redis.call('hget', infoKey, 'beginTime')
 local endTime = redis.call('hget', infoKey, 'endTime')
 if (not beginTime) or (not endTime) then
     -- 活动信息不存在（可能未预热/已过期/配置错误）
-    return -1
+    return -3
 end
 local t = redis.call('time')
 local nowMillis = t[1] * 1000 + math.floor(t[2] / 1000)

@@ -1,5 +1,6 @@
 package com.zwz5.service;
 
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.entity.Blog;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -13,4 +14,11 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface IBlogService extends IService<Blog> {
 
+    Result queryBlogById(Long id);
+
+    Result queryHotBlog(Integer current);
+
+    Result queryBlogLikes(Long id);
+
+    Result likeBlog(Long id);
 }

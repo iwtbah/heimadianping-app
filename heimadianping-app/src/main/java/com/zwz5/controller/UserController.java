@@ -10,12 +10,15 @@ import com.zwz5.service.IUserService;
 import com.zwz5.common.utils.RandomUtils;
 import com.zwz5.constants.RedisConstants;
 import com.zwz5.common.utils.RegexUtils;
+import com.zwz5.common.utils.UserHolder;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.cglib.beans.BeanMap;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -118,15 +121,18 @@ public class UserController {
      * @return 无
      */
     @PostMapping("/logout")
-    public Result logout(){
-        // TODO 实现登出功能
-        return Result.fail("功能未完成");
+    public Result logout(HttpServletRequest request){
+        String token = request.getHeader("authorization");
+        if (StringUtils.hasLength(token)) {
+            stringRedisTemplate.delete(RedisConstants.LOGIN_USER_KEY + token);
+        }
+        UserHolder.removeUser();
+        return Result.ok();
     }
 
     @GetMapping("/me")
     public Result me(){
-        // TODO 获取当前登录的用户并返回
-        return Result.fail("功能未完成");
+        return Result.ok(UserHolder.getUser());
     }
 
     @GetMapping("/info/{id}")

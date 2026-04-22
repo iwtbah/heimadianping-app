@@ -5,12 +5,14 @@ import com.zwz5.common.result.Result;
 import com.zwz5.common.utils.UserHolder;
 import com.zwz5.pojo.dto.UserDTO;
 import com.zwz5.pojo.entity.Follow;
+import com.zwz5.pojo.entity.User;
 import com.zwz5.mapper.FollowMapper;
 import com.zwz5.service.IFollowService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zwz5.service.IUserService;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +23,7 @@ import java.util.stream.Collectors;
 
 /**
  * <p>
- *  服务实现类
+ * 服务实现类
  * </p>
  *
  * @author 虎哥
@@ -38,6 +40,7 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
 
     /**
      * 关注某
+     *
      * @param followUserId
      * @param isFollow
      * @return
@@ -47,32 +50,47 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
         // 获取登录用户
         UserDTO user = UserHolder.getUser();
         Long userId = user.getId();
+        Result validateResult = validateFollowTarget(userId, followUserId, isFollow);
+        if (validateResult != null) {
+            return validateResult;
+        }
         String key = "follows:" + userId;
+        // 没关注过则关注
         if (isFollow) {
-            // 没关注过则关注
-            // 检查是否关注 TODO
+            if (hasFollowed(userId, followUserId)) {
+                return Result.fail("重复关注！");
+            }
             Follow follow = new Follow();
             follow.setUserId(userId);
             follow.setFollowUserId(followUserId);
-            boolean save = save(follow);
-            if (save) {
-                // 保存的redis中
-                stringRedisTemplate.opsForSet().add(key, followUserId.toString());
+            try {
+                // 数据库联合唯一索引兜底，避免并发下插入重复关注记录。
+                boolean save = save(follow);
+                if (save) {
+                    // DB 写入成功后再同步 Redis 关注集合。
+                    stringRedisTemplate.opsForSet().add(key, followUserId.toString());
+                }
+            } catch (DuplicateKeyException e) {
+                return Result.fail("重复关注！");
             }
-        }else {
+        } else {
             // 关注则取消
-            // 检查是否关注 TODO
-            boolean remove = remove(new QueryWrapper<Follow>().eq("user_id", userId).eq("follow_user_id", followUserId));
-            if (remove) {
-                // 把关注用户的id从Redis集合中移除
-                stringRedisTemplate.opsForSet().remove(key, followUserId.toString());
+            if (hasFollowed(userId, followUserId)) {
+                boolean remove = remove(new QueryWrapper<Follow>().eq("user_id", userId).eq("follow_user_id", followUserId));
+                if (remove) {
+                    // 把关注用户的id从Redis集合中移除
+                    stringRedisTemplate.opsForSet().remove(key, followUserId.toString());
+                }
+            } else {
+                return Result.fail("未关注用户！");
             }
         }
         return Result.ok();
     }
 
     /**
-     *  查询是否关注
+     * 查询是否关注
+     *
      * @param followUserId
      * @return
      */
@@ -81,13 +99,13 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
         // 获取登录用户
         UserDTO user = UserHolder.getUser();
         Long userId = user.getId();
-        // 查询是否关注 select count(*) from tb_follow where user_id = ? and follow_user_id = ?
-        Long count = query().eq("user_id", userId).eq("follow_user_id", followUserId).count();
-        return Result.ok(count > 0);
+        boolean isFollow = hasFollowed(userId, followUserId);
+        return Result.ok(isFollow);
     }
 
     /**
      * 共同关注
+     *
      * @param followUserId
      * @return
      */
@@ -118,5 +136,29 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
                 }).toList();
 
         return Result.ok(userDTOList);
+    }
+
+    private boolean hasFollowed(Long userId, Long followUserId) {
+        return lambdaQuery()
+                .eq(Follow::getUserId, userId)
+                .eq(Follow::getFollowUserId, followUserId)
+                .count() > 0;
+    }
+
+    private Result validateFollowTarget(Long userId, Long followUserId, Boolean isFollow) {
+        if (followUserId == null) {
+            return Result.fail("目标用户不能为空！");
+        }
+        if (isFollow == null) {
+            return Result.fail("关注操作参数不能为空！");
+        }
+        if (userId.equals(followUserId)) {
+            return Result.fail("不能关注自己！");
+        }
+        User followUser = userService.getById(followUserId);
+        if (followUser == null) {
+            return Result.fail("目标用户不存在！");
+        }
+        return null;
     }
 }

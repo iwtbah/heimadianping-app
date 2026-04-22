@@ -1,7 +1,10 @@
 package com.zwz5.service.impl;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zwz5.common.cache.CacheClient;
 import com.zwz5.common.cache.RedisCacheClient;
+import com.zwz5.common.result.Result;
+import com.zwz5.constants.SystemConstants;
 import com.zwz5.exception.LockException;
 import com.zwz5.exception.NullException;
 import com.zwz5.pojo.entity.Shop;
@@ -13,19 +16,24 @@ import com.zwz5.common.redis.RedisData;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.geo.Distance;
+import org.springframework.data.geo.GeoResult;
+import org.springframework.data.geo.GeoResults;
+import org.springframework.data.redis.connection.RedisGeoCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.domain.geo.GeoReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static com.zwz5.constants.RedisConstants.*;
 
@@ -88,6 +96,74 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             }
             stringRedisTemplate.delete(key);
         }, cacheOpsExecutor);
+    }
+
+    /**
+     * 根据类型，距离查询Shop
+     *
+     * @param typeId
+     * @param current
+     * @param x
+     * @param y
+     * @return
+     */
+    @Override
+    public Result queryShopByType(Integer typeId, Integer current, Double x, Double y) {
+        // 1.判断是否需要坐标查询
+        if (x == null || y == null) {
+            // 根据类型分页查询
+            Page<Shop> page = lambdaQuery()
+                    .eq(Shop::getTypeId, typeId)
+                    .page(new Page<>(current, SystemConstants.DEFAULT_PAGE_SIZE));
+            // 返回数据
+            return Result.ok(page.getRecords());
+        }
+
+
+        // 2.计算分页参数
+        int from = (current - 1) * SystemConstants.DEFAULT_PAGE_SIZE;
+        int end = current * SystemConstants.DEFAULT_PAGE_SIZE;
+
+        // 3.redis中查询，x y point距离店铺在指定范围内的集合
+        String key = SHOP_GEO_KEY + typeId;
+        GeoResults<RedisGeoCommands.GeoLocation<String>> results = stringRedisTemplate.opsForGeo() // GEOSEARCH key BYLONLAT x y BYRADIUS 10 WITHDISTANCE
+                .search(
+                        key,
+                        GeoReference.fromCoordinate(x, y),
+                        new Distance(5000),
+                        RedisGeoCommands.GeoSearchCommandArgs.newGeoSearchArgs().includeDistance().limit(end));
+
+
+        // 4.解析出id
+        if (results == null) {
+            return Result.ok(Collections.emptyList());
+        }
+        List<GeoResult<RedisGeoCommands.GeoLocation<String>>> list = results.getContent();
+        if (list.size() <= from) {
+            // 没有下一页了，结束
+            return Result.ok(Collections.emptyList());
+        }
+        // 4.1.截取 from ~ end的部分
+        List<Long> ids = new ArrayList<>(list.size());
+        Map<String, Distance> distanceMap = new HashMap<>(list.size());
+        list.stream().skip(from).forEach(result -> {
+            // 4.2.获取店铺id
+            String shopIdStr = result.getContent().getName();
+            ids.add(Long.valueOf(shopIdStr));
+            // 4.3.获取距离
+            Distance distance = result.getDistance();
+            distanceMap.put(shopIdStr, distance);
+        });
+        // 5.根据id查询Shop
+        String idStr = ids.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining());
+        List<Shop> shops = query().in("id", ids).last("ORDER BY FIELD(id," + idStr + ")").list();
+        for (Shop shop : shops) {
+            shop.setDistance(distanceMap.get(shop.getId().toString()).getValue());
+        }
+        // 6.返回
+        return Result.ok(shops);
     }
 
     /**
@@ -232,7 +308,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
     }*/
 
-     /**
+    /**
      * 缓存击穿 逻辑过期 + 异步重建 方案
      * 使用场景：热点店铺读多写少，允许短暂返回旧值。
      * 1. 读取 Redis 逻辑过期结构，命中空串说明数据库无记录，直接抛出 NullException。

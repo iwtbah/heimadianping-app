@@ -1,5 +1,6 @@
 package com.zwz5.service;
 
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.entity.Shop;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -16,4 +17,6 @@ public interface IShopService extends IService<Shop> {
     Shop queryById(Long id);
 
     void update(Shop shop);
+
+    Result queryShopByType(Integer typeId, Integer current, Double x, Double y);
 }

@@ -1,6 +1,7 @@
 package com.zwz5.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zwz5.common.result.Result;
 import com.zwz5.pojo.entity.User;
 
 /**
@@ -14,4 +15,8 @@ import com.zwz5.pojo.entity.User;
 public interface IUserService extends IService<User> {
 
     User createUserWithPhone(String phone);
+
+    Result sign();
+
+    Result signCount();
 }

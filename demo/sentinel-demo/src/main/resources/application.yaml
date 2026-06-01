@@ -1,0 +1,43 @@
+spring:
+  redis:
+    # Redis 数据节点密码，对应三台 Redis 的 requirepass。
+    # 注意：这不是 Sentinel 自身密码；当前 Sentinel 没有单独设置登录密码。
+    password:
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: 100ms
+#    sentinel:
+#      master: mymaster
+#      # 本机 IDEA 运行客户端时，连接宿主机映射出来的 Sentinel 端口。
+#      # Sentinel 返回的 Redis master/replica 地址是 Docker 内网 IP，
+#      # 下面 app.redis.address-mappings 会把这些地址映射成本机 127.0.0.1 端口。
+#      nodes:
+#        - 127.0.0.1:26380
+#        - 127.0.0.1:26381
+#        - 127.0.0.1:26382
+
+    cluster:
+      nodes:
+        - localhost:7001
+        - localhost:7002
+        - localhost:7003
+        - localhost:7004
+        - localhost:7005
+        - localhost:7006
+app:
+  redis:
+    # Lettuce 地址映射：用于本机运行 Spring Boot 客户端时访问 Docker 内部 Redis 节点。
+    # Sentinel 会返回 172.30.0.x:638x，Lettuce 实际连接前映射为 127.0.0.1:638x。
+    # 如果客户端也运行在同一个 Docker 网络中，则不需要这些映射，可改为直连 172.30.0.x。
+    address-mappings:
+      - from: 172.30.0.10:6380
+        to: 127.0.0.1:6380
+      - from: 172.30.0.11:6381
+        to: 127.0.0.1:6381
+      - from: 172.30.0.12:6382
+        to: 127.0.0.1:6382
+
+

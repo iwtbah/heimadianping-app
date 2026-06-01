@@ -59,6 +59,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 获取当前为月的第几天
         int dayOfMonth = now.getDayOfMonth();
         // 写入Redis中的BitMap
+        if (Boolean.TRUE.equals(stringRedisTemplate.opsForValue().getBit(key, dayOfMonth - 1))) {
+            return Result.ok("用户已经签到");
+        }
         stringRedisTemplate.opsForValue().setBit(key, dayOfMonth - 1, true);
         return Result.ok();
     }
@@ -91,7 +94,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         // 循环遍历
         int count = 0;
-        for (int i = 0; i < 31; i++) {
+        for (int i = 0; i < dayOfMonth; i++) {
             // 判断最后一位，如果签到则累加，未位签到则结束
             if ((num & 1) != 0) {
                 count++;

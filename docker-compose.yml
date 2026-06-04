@@ -199,7 +199,7 @@ services:
   openresty:
     build:
       context: ./openresty
-    image: heimadianping-openresty:local
+    image: openresty:local
     ports:
       - "8088:80"
     networks:
